@@ -1,5 +1,13 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string>
+#include <iostream>
+
+using namespace std;
+
+// variables globales
+
+const int textSize = 255;
 
 typedef struct {
     unsigned char first_byte;
@@ -70,6 +78,30 @@ void print_file_info(Fat16Entry *entry) {
         entry->starting_cluster, entry->file_size);
 }
 
+void ls_l (Fat16Entry *entry) {
+  switch(entry->filename[0]) {
+    case 0x00:
+        return; // unused entry
+    case 0xE5:
+        return; // don't show
+    case 0x05:
+        break; // don't show
+    case 0x2E: {
+        printf("directorio\t%04d-%02d-%02d %02d:%02d.%02d\t%d", 1980 + (entry->modify_date >> 9), (entry->modify_date >> 5) & 0xF, entry->modify_date & 0x1F,
+          (entry->modify_time >> 11), (entry->modify_time >> 5) & 0x3F, entry->modify_time & 0x1F,
+          entry->starting_cluster, entry->file_size);
+        printf("\t%.8s.%.3s\n", entry->filename, entry->ext);
+        break;
+    }
+    default: {
+      printf("archivo\t%04d-%02d-%02d %02d:%02d.%02d\t%d", 1980 + (entry->modify_date >> 9), (entry->modify_date >> 5) & 0xF, entry->modify_date & 0x1F,
+          (entry->modify_time >> 11), (entry->modify_time >> 5) & 0x3F, entry->modify_time & 0x1F,
+          entry->starting_cluster, entry->file_size);
+        printf("\t%.8s.%.3s\n", entry->filename, entry->ext);
+    }
+  }
+}
+
 int main() {
     FILE * in = fopen("test.img", "rb");
     int i;
@@ -102,12 +134,22 @@ int main() {
     fseek(in, (bs.reserved_sectors-1 + bs.fat_size_sectors * bs.number_of_fats) *
           bs.sector_size, SEEK_CUR);
 
-    for(i=0; i<bs.root_dir_entries; i++) {
-        fread(&entry, sizeof(entry), 1, in);
-        print_file_info(&entry);
+    string command;
+    bool stop = false;
+    while (!stop) {
+      printf(">");
+      getline(cin, command);
+      if (command == "ls -l") {
+        for(i=0; i<bs.root_dir_entries; i++) {
+          fread(&entry, sizeof(entry), 1, in);
+          ls_l(&entry);
+        }
+      } else if (command == "exit") {
+        cout << "ha salido de la consola" << endl;
+        stop = true;
+      }
     }
-
-    printf("\nRoot directory read, now at 0x%X\n", ftell(in));
+    // printf("\nRoot directory read, now at 0x%X\n", ftell(in));
     fclose(in);
     return 0;
 }
