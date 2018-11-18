@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <string>
+#include <string.h>
 #include <iostream>
 
 using namespace std;
@@ -102,6 +102,127 @@ void ls_l (Fat16Entry *entry) {
   }
 }
 
+void read_file(FILE *in, unsigned int fat_start, unsigned int data_start,
+  unsigned int cluster_size, unsigned short cluster, unsigned int file_size) {
+    unsigned char buffer[4096];
+    size_t bytes_read, bytes_to_read,
+           file_left = file_size, cluster_left = cluster_size;
+
+    // Go to first data cluster
+    fseek(in, data_start + cluster_size * (cluster-2), SEEK_SET);
+
+    // Read until we run out of file or clusters
+    while(file_left > 0 && cluster != 0xFFFF) {
+        bytes_to_read = sizeof(buffer);
+
+        // don't read past the file or cluster end
+        if(bytes_to_read > file_left)
+            bytes_to_read = file_left;
+        if(bytes_to_read > cluster_left)
+            bytes_to_read = cluster_left;
+
+        // read data from cluster, write to file
+        bytes_read = fread(buffer, 1, bytes_to_read, in);
+        // print file data
+        cout << buffer << endl;
+
+        // decrease byte counters for current cluster and whole file
+        cluster_left -= bytes_read;
+        file_left -= bytes_read;
+
+        // if we have read the whole cluster, read next cluster # from FAT
+        if(cluster_left == 0) {
+            fseek(in, fat_start + cluster*2, SEEK_SET);
+            fread(&cluster, 2, 1, in);
+
+            printf("End of cluster reached, next cluster %d\n", cluster);
+
+            fseek(in, data_start + cluster_size * (cluster-2), SEEK_SET);
+            cluster_left = cluster_size; // reset cluster byte counter
+        }
+    }
+}
+
+bool isCatRead (string command) {
+  if (command.size() >= 4) {
+    string cat = command.substr(0, 4);
+    if (cat == "cat ") {
+      string file = command.substr(4, command.size());
+      cout << file << endl;
+      return true;
+    } else {
+      return false;
+    }
+  } else {
+    return false;
+  }
+}
+
+void catRead (FILE *in, PartitionTable *pt, Fat16BootSector bs, Fat16Entry entry, string file) {
+  // Copy filename and extension to space-padded search strings
+  int i, j;
+  unsigned int fat_start, root_start, data_start;
+  char filename[9] = "        ", file_ext[4] = "   "; // initially pad with spaces
+  for(i=0; i<8 && file[i] != '.' && file[i] != 0; i++)
+    filename[i] = file[i];
+  for(j=1; j<=3 && file[i+j] != 0; j++)
+    file_ext[j-1] = file[i+j];
+
+  // printf("Opened %s, looking for [%s.%s]\n", argv[1], filename, file_ext);
+
+    fseek(in, 0x1BE, SEEK_SET); // go to partition table start
+    fread(pt, sizeof(PartitionTable), 4, in); // read all four entries
+
+    for(i=0; i<4; i++) {
+        if(pt[i].partition_type == 4 || pt[i].partition_type == 6 ||
+            pt[i].partition_type == 14) {
+            //printf("FAT16 filesystem found from partition %d\n", i);
+            break;
+        }
+    }
+
+    if(i == 4) {
+        printf("No FAT16 filesystem found, exiting...\n");
+        return;
+    }
+
+    fseek(in, 512 * pt[i].start_sector, SEEK_SET);
+    fread(&bs, sizeof(Fat16BootSector), 1, in);
+
+    // Calculate start offsets of FAT, root directory and data
+    fat_start = ftell(in) + (bs.reserved_sectors-1) * bs.sector_size;
+    root_start = fat_start + bs.fat_size_sectors * bs.number_of_fats *
+        bs.sector_size;
+    data_start = root_start + bs.root_dir_entries * sizeof(Fat16Entry);
+
+    /* printf("FAT start at %08X, root dir at %08X, data at %08X\n",
+            fat_start, root_start, data_start); */
+
+    fseek(in, root_start, SEEK_SET);
+
+    /* cout << filename << endl;
+    cout << file_ext << endl; */
+
+    for(i=0; i<bs.root_dir_entries; i++) {
+      fread(&entry, sizeof(entry), 1, in);
+
+      if(memcmp(entry.filename, filename, 8) == 0 &&
+          memcmp(entry.ext, file_ext, 3) == 0) {
+              // printf("File found!\n");
+              break;
+          }
+    }
+
+    if(i == bs.root_dir_entries) {
+        printf("Archivo no encontrado!");
+        return;
+    }
+
+    // out = fopen(argv[2], "wb"); // write the file contents to disk
+    read_file(in, fat_start, data_start, bs.sectors_per_cluster *
+                  bs.sector_size, entry.starting_cluster, entry.file_size);
+}
+
 int main() {
     FILE * in = fopen("test.img", "rb");
     int i;
@@ -147,6 +268,8 @@ int main() {
       } else if (command == "exit") {
         cout << "ha salido de la consola" << endl;
         stop = true;
+      } else if (isCatRead(command)) {
+        catRead(in, pt, bs, entry, command.substr(4, command.size()));
       }
     }
     // printf("\nRoot directory read, now at 0x%X\n", ftell(in));
