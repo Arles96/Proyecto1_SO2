@@ -255,6 +255,8 @@ int main() {
       fseek(in, (bs.reserved_sectors-1 + bs.fat_size_sectors * bs.number_of_fats) *
             bs.sector_size, SEEK_CUR);
 
+      cout << "dir entries :" << bs.root_dir_entries << endl;
+
     
       command = "";
       printf(">");
@@ -316,6 +318,21 @@ int main() {
         memcpy(newDirEntry.filename, folderName.c_str(), folderName.length());
         memcpy(newDirEntry.ext, "   ", 3);
         newDirEntry.attributes = 16;
+
+        newDirEntry.reserved[0] = 0x00;
+        newDirEntry.reserved[1] = 0x35;
+        newDirEntry.reserved[2] = 0x21;
+        newDirEntry.reserved[3] = 0xA4;
+        newDirEntry.reserved[4] = 0x81;
+        newDirEntry.reserved[5] = 0x40;
+        newDirEntry.reserved[6] = 0x81;
+        newDirEntry.reserved[7] = 0x40;
+        newDirEntry.reserved[8] = 0x00;
+        newDirEntry.reserved[9] = 0x00;
+
+        newDirEntry.modify_time = 42018;
+        newDirEntry.modify_date = 16513;
+
         newDirEntry.file_size = 0;
 
         //Search free sector
@@ -358,6 +375,21 @@ int main() {
         memcpy(currentDirEntry.filename, ".       ",8);
         memcpy(currentDirEntry.ext, "   ",3);
         currentDirEntry.attributes = 16;
+        
+        currentDirEntry.reserved[0] = 0x00;
+        currentDirEntry.reserved[1] = 0x35;
+        currentDirEntry.reserved[2] = 0x21;
+        currentDirEntry.reserved[3] = 0xA4;
+        currentDirEntry.reserved[4] = 0x81;
+        currentDirEntry.reserved[5] = 0x40;
+        currentDirEntry.reserved[6] = 0x81;
+        currentDirEntry.reserved[7] = 0x40;
+        currentDirEntry.reserved[8] = 0x00;
+        currentDirEntry.reserved[9] = 0x00;
+
+        currentDirEntry.modify_time = 42018;
+        currentDirEntry.modify_date = 16513;
+
         currentDirEntry.starting_cluster = newDirOff;
         currentDirEntry.file_size = 0;
 
@@ -365,6 +397,21 @@ int main() {
         memcpy(parentDirEntry.filename, "..      ", 8);
         memcpy(parentDirEntry.ext, "   ", 3);
         parentDirEntry.attributes = 16;
+        
+        parentDirEntry.reserved[0] = 0x00;
+        parentDirEntry.reserved[1] = 0x35;
+        parentDirEntry.reserved[2] = 0x21;
+        parentDirEntry.reserved[3] = 0xA4;
+        parentDirEntry.reserved[4] = 0x81;
+        parentDirEntry.reserved[5] = 0x40;
+        parentDirEntry.reserved[6] = 0x81;
+        parentDirEntry.reserved[7] = 0x40;
+        parentDirEntry.reserved[8] = 0x00;
+        parentDirEntry.reserved[9] = 0x00;
+
+        parentDirEntry.modify_time = 42018;
+        parentDirEntry.modify_date = 16513;
+
         parentDirEntry.starting_cluster = currDirectory;
         parentDirEntry.file_size = 0;
 
