@@ -303,8 +303,6 @@ int main() {
                 currDirectory = entry.starting_cluster;
             }
         } while(entry.filename[0] != 0x00);
-
-        //cout << "Current Directory " << currDirectory << endl;
 //mkdir [NAME]
       } else if (command.substr(0,6) == "mkdir ") {
         string folderName = command.substr(6, command.size());
@@ -388,18 +386,26 @@ int main() {
 //cat > [NAME]
       } else if (command.substr(0, 6) == "cat > "){
         string folderName = command.substr(6, command.size());
-        string extension;
 
-        for(int j = folderName.length(); j < 12; j++){
-          folderName += (char)32;
+        string catFilename, catFileext; // initially pad with spaces
+        int k;
+
+        for(k = 0; k < 8 && folderName[k] != '.' && folderName[k] != 0; k++){
+          catFilename += folderName[k];
         }
-        extension = folderName.substr(9, 3);
-        folderName = folderName.substr(0, 8);
+        for(int j = 1; j <= 3 && folderName[k + j] != 0; j++){
+          catFileext += folderName[k + j];
+        }
+
+        for(;catFilename.length() < 8;)
+          catFilename += " ";
+        for(;catFilename.length() < 3;)
+          catFileext += " ";
         
 
         Fat16Entry newDirEntry;
-        memcpy(newDirEntry.filename, folderName.c_str(), folderName.length());
-        memcpy(newDirEntry.ext, extension.c_str(), extension.length());
+        memcpy(newDirEntry.filename, catFilename.c_str(), catFilename.length());
+        memcpy(newDirEntry.ext, catFileext.c_str(), catFileext.length());
         newDirEntry.attributes = 32;
         newDirEntry.file_size = 4;
 
@@ -448,6 +454,53 @@ int main() {
         fclose(out);
         in = fopen("test.img", "rb");
         fclose(in);
+
+//cat [NAME]
+      } else if (command.substr(0, 4) == "cat "){
+        string catFile = command.substr(4, command.length());
+        
+        string catFilename, catFileext; // initially pad with spaces
+        int k;
+
+        for(k = 0; k < 8 && catFile[k] != '.' && catFile[k] != 0; k++){
+          catFilename += catFile[k];
+        }
+        for(int j = 1; j <=3 && catFile[k + j] != 0; j++){
+          catFileext += catFile[k + j];
+        }
+
+        for(;catFilename.length() < 8;)
+          catFilename += " ";
+        for(;catFilename.length() < 3;)
+          catFileext += " ";
+
+        if(currDirectory == 0){
+          fseek(in, ROOT_ADDRESS, SEEK_SET); //Seek for folder
+        } else {
+          fseek(in, (ROOT_ADDRESS + (0x4000 * (currDirectory - 1))), SEEK_SET); //Seek for folder   
+        }
+
+        //Change directory
+        do {
+            fread(&entry, sizeof(entry), 1, in);
+            string fileName, fileExt;
+            for(int j = 0; j < 8; j++){
+              fileName += entry.filename[j];
+            }
+            for(int j = 0; j < 3; j++){
+              fileExt += entry.ext[j];
+            }
+
+
+            if ((catFilename == fileName) && (catFileext == fileExt) && entry.attributes == 32){
+              char catBuffer[entry.file_size];
+              fseek(in, (ROOT_ADDRESS + (0x4000 * (entry.starting_cluster - 1))), SEEK_SET);
+              fread(&catBuffer, sizeof(catBuffer), 1, in);
+              printf("%s", catBuffer);
+              printf("\n");
+            }
+        } while(entry.filename[0] != 0x00);
+
       } else if (command == "exit") {
         cout << "ha salido de la consola" << endl;
         stop = true;
