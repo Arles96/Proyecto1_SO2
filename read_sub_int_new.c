@@ -78,13 +78,17 @@ void print_file_info(Fat16Entry *entry) {
 }
 
 int main() {
-
     FILE * in = fopen("test.img", "rb");
     int i;
     PartitionTable pt[4];
     Fat16BootSector bs;
     Fat16Entry entry;
-    
+
+    char imageBuffer[1048576];
+    fseek(in, 0, SEEK_SET);
+    fread(imageBuffer, sizeof(imageBuffer), 1, in);
+
+
     fseek(in, 0x1BE, SEEK_SET); // go to partition table start
     fread(pt, sizeof(PartitionTable), 4, in); // read all four entries
     
@@ -107,7 +111,7 @@ int main() {
     //Start console
     char path[N] = "\\";
     char folderName[8] = "SUBDIR ";
-    int currDirectory = 0x00; //Root
+    int currDirectory = 0x13; //Root
 
     printf("C:%s>", path);
     gets(path);
@@ -118,7 +122,7 @@ int main() {
 
     //Loop start
     //do {
-        /*if(currDirectory == 0){
+        if(currDirectory == 0){
             fseek(in, ROOT_ADDRESS, SEEK_SET); //Seek for folder
             do {
                 fread(&entry, sizeof(entry), 1, in);
@@ -131,7 +135,7 @@ int main() {
                 printf("%d %d %d %d %d %d %d %d \n",folderName[0],folderName[1],folderName[2],folderName[3],folderName[4],folderName[5], folderName[6], folderName[7]);
                 printf("Comp %d\n", strcmp(folderName, fileName));
                 //printf("%s_", sizeof(entry.filename));
-                //printf("%d-\n", strcmp(folderName, entry.filename));
+                //printf("%d-\n", strcmp(folderName, entry.filename));*/
                 if ((strcmp(folderName, fileName) < 0) && entry.attributes == 16){
                     currDirectory = entry.starting_cluster;
                     
@@ -171,17 +175,17 @@ int main() {
             fread(&entry, sizeof(entry), 1, in);
             print_file_info(&entry);
         } while(entry.filename[0] != 0x00);
-    }*/
+    }
 
 
-    //TODO:mkdir
-    int freeSector = -1;
-
-    Fat16Entry newDirEntry;
+//TODO:mkdir [NAME]
+    /*Fat16Entry newDirEntry;
     strcpy(newDirEntry.filename, "NEWDIR");
+    strcpy(newDirEntry.ext, "   ");
     newDirEntry.attributes = 16;
     newDirEntry.file_size = 0;
 
+    //Search free sector
     int newDirOff = 1;
     do { //Skip to free sector
         newDirOff++;
@@ -189,22 +193,120 @@ int main() {
         fread(&entry, sizeof(entry), 1, in);
 
     } while(entry.filename[0] != 0x00);
-    printf("Free sector found in %d", newDirOff);
-    newDirEntry.start_sector = newDirOff;
+    printf("Free sector found in %d\n", newDirOff);
+    newDirEntry.starting_cluster = newDirOff;
     
+    //Writing dir entry
     if(currDirectory == 0){
         fseek(in, ROOT_ADDRESS, SEEK_SET); //Seek for folder
         do {
             fread(&entry, sizeof(entry), 1, in);
         } while(entry.filename[0] != 0x00);
         //Write here
+        int pointer = ftell(in) - 32;
+        
+        memcpy(&(imageBuffer[pointer]), &newDirEntry, sizeof(newDirEntry));
     } else {
         fseek(in, (ROOT_ADDRESS + (0x4000 * (currDirectory - 1))), SEEK_SET); //Seek for folder
+
         do {
             fread(&entry, sizeof(entry), 1, in);
         } while(entry.filename[0] != 0x00);
-        //write here
+        //Write here
+        int pointer = ftell(in) - 32;
+        
+        memcpy(&(imageBuffer[pointer]), &newDirEntry, sizeof(newDirEntry));
     }
+
+    //Write folder on image
+    Fat16Entry currentDirEntry; //Dir .
+    Fat16Entry parentDirEntry; //Dir ..
+
+    //Dir . entry
+    strcpy(currentDirEntry.filename, ".       ");
+    strcpy(currentDirEntry.ext, "   ");
+    currentDirEntry.attributes = 16;
+    currentDirEntry.starting_cluster = newDirOff;
+    currentDirEntry.file_size = 0;
+
+    //Dir .. entry
+    strcpy(parentDirEntry.filename, "..      ");
+    strcpy(parentDirEntry.ext, "   ");
+    parentDirEntry.attributes = 16;
+    parentDirEntry.starting_cluster = currDirectory;
+    parentDirEntry.file_size = 0;
+
+    
+    //Write to buffer
+    int newDirpt = (ROOT_ADDRESS + (0x4000 * (newDirOff - 1)));
+    memcpy(&(imageBuffer[newDirpt]), &currentDirEntry, sizeof(currentDirEntry));
+    newDirpt += 32;
+    memcpy(&(imageBuffer[newDirpt]), &parentDirEntry, sizeof(parentDirEntry));
+
+    //Write to file
+    fclose(in);
+    FILE * out = fopen("test.img", "wb");
+    fwrite(imageBuffer , 1, sizeof(imageBuffer), out);
+    fclose(out);
+    in = fopen("test.img", "rb");
+    fclose(in);
+    //End Write to file*/
+//End mkdir
+
+//cat > [NAME.EXT]
+    /*Fat16Entry newDirEntry;
+    strcpy(newDirEntry.filename, "A      ");
+    strcpy(newDirEntry.ext, "TXT");
+    newDirEntry.attributes = 32;
+    newDirEntry.file_size = 4;
+
+    //Search free sector
+    int newDirOff = 1;
+    do { //Skip to free sector
+        newDirOff++;
+        fseek(in, (ROOT_ADDRESS + (0x4000 * (newDirOff - 1))), SEEK_SET); //Seek for folder
+        fread(&entry, sizeof(entry), 1, in);
+
+    } while(entry.filename[0] != 0x00);
+    printf("Free cluster found in %d\n", newDirOff);
+    newDirEntry.starting_cluster = newDirOff;
+    
+    //Writing dir entry
+    if(currDirectory == 0){
+        fseek(in, ROOT_ADDRESS, SEEK_SET); //Seek for folder
+        do {
+            fread(&entry, sizeof(entry), 1, in);
+        } while(entry.filename[0] != 0x00);
+        //Write here
+        int pointer = ftell(in) - 32;
+        
+        memcpy(&(imageBuffer[pointer]), &newDirEntry, sizeof(newDirEntry));
+    } else {
+        fseek(in, (ROOT_ADDRESS + (0x4000 * (currDirectory - 1))), SEEK_SET); //Seek for folder
+
+        do {
+            fread(&entry, sizeof(entry), 1, in);
+        } while(entry.filename[0] != 0x00);
+        //Write here
+        int pointer = ftell(in) - 32;
+        
+        memcpy(&(imageBuffer[pointer]), &newDirEntry, sizeof(newDirEntry));
+    }
+
+    //Write to buffer
+    int newDirpt = (ROOT_ADDRESS + (0x4000 * (newDirOff - 1)));
+    char hola[4] = "Hola";
+    memcpy(&(imageBuffer[newDirpt]), &hola, sizeof(hola));
+
+    //Write to file
+    fclose(in);
+    FILE * out = fopen("test.img", "wb");
+    fwrite(imageBuffer , 1, sizeof(imageBuffer), out);
+    fclose(out);
+    in = fopen("test.img", "rb");
+    fclose(in);*/
+    //End Write to file
+//End cat > a.txt
 
     fclose(in);
     return 0;

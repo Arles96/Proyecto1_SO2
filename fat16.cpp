@@ -211,7 +211,7 @@ int main() {
     string command;
     bool stop = false;
     int counter = 0;
-    while (!stop) {
+    
       FILE * in = fopen("test.img", "rb");
       int i;
       PartitionTable pt[4];
@@ -239,13 +239,14 @@ int main() {
       fseek(in, 512 * pt[i].start_sector, SEEK_SET);
       fread(&bs, sizeof(Fat16BootSector), 1, in);
 
-      if (counter == 0) {
+      /*if (counter == 0) {
         printf("Now at 0x%X, sector size %d, FAT size %d sectors, %d FATs\n\n",
             ftell(in), bs.sector_size, bs.fat_size_sectors, bs.number_of_fats);
-      }
+      }*/
 
       fseek(in, (bs.reserved_sectors-1 + bs.fat_size_sectors * bs.number_of_fats) *
             bs.sector_size, SEEK_CUR);
+    while (!stop) {
       printf(">");
       getline(cin, command);
       if (command == "ls -l") {
@@ -253,6 +254,8 @@ int main() {
           fread(&entry, sizeof(entry), 1, in);
           ls_l(&entry);
         }
+      } else if (command.substr(0,2) == "cd" ){
+        
       } else if (command == "exit") {
         cout << "ha salido de la consola" << endl;
         stop = true;
@@ -260,7 +263,7 @@ int main() {
         catRead(in, pt, bs, entry, command.substr(4, command.size()));
       }
       fclose(in);
-      counter++;
+      //counter++;
     }
     // printf("\nRoot directory read, now at 0x%X\n", ftell(in));
     return 0;
