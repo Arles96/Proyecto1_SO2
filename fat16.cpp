@@ -55,29 +55,6 @@ typedef struct {
     unsigned int file_size;
 } __attribute((packed)) Fat16Entry;
 
-void print_file_info(Fat16Entry *entry) {
-    switch(entry->filename[0]) {
-    case 0x00:
-        return; // unused entry
-    case 0xE5:
-        printf("Deleted file: [?%.7s.%.3s]\n", entry->filename+1, entry->ext);
-        return;
-    case 0x05:
-        printf("File starting with 0xE5: [%c%.7s.%.3s]\n", 0xE5, entry->filename+1, entry->ext);
-        break;
-    case 0x2E:
-        printf("Directory: [%.8s.%.3s]\n", entry->filename, entry->ext);
-        break;
-    default:
-        printf("File: [%.8s.%.3s]\n", entry->filename, entry->ext);
-    }
-
-    printf("  Modified: %04d-%02d-%02d %02d:%02d.%02d    Start: [%04X]    Size: %d\n",
-        1980 + (entry->modify_date >> 9), (entry->modify_date >> 5) & 0xF, entry->modify_date & 0x1F,
-        (entry->modify_time >> 11), (entry->modify_time >> 5) & 0x3F, entry->modify_time & 0x1F,
-        entry->starting_cluster, entry->file_size);
-}
-
 void ls_l (Fat16Entry *entry) {
   switch(entry->filename[0]) {
     case 0x00:
@@ -87,17 +64,24 @@ void ls_l (Fat16Entry *entry) {
     case 0x05:
         break; // don't show
     case 0x2E: {
-        printf("directorio\t%04d-%02d-%02d %02d:%02d.%02d\t%d", 1980 + (entry->modify_date >> 9), (entry->modify_date >> 5) & 0xF, entry->modify_date & 0x1F,
-          (entry->modify_time >> 11), (entry->modify_time >> 5) & 0x3F, entry->modify_time & 0x1F,
-          entry->starting_cluster, entry->file_size);
+        printf("directorio\t%04d-%02d-%02d %02d:%02d.%02d\t%d", 1980 + (entry->modify_date >> 9),
+          (entry->modify_date >> 5) & 0xF, entry->modify_date & 0x1F, (entry->modify_time >> 11),
+          (entry->modify_time >> 5) & 0x3F, entry->modify_time & 0x1F, entry->file_size);
         printf("\t%.8s.%.3s\n", entry->filename, entry->ext);
         break;
     }
     default: {
-      printf("archivo\t%04d-%02d-%02d %02d:%02d.%02d\t%d", 1980 + (entry->modify_date >> 9), (entry->modify_date >> 5) & 0xF, entry->modify_date & 0x1F,
-          (entry->modify_time >> 11), (entry->modify_time >> 5) & 0x3F, entry->modify_time & 0x1F,
-          entry->starting_cluster, entry->file_size);
+      if (entry->file_size == 0) {
+        printf("directorio\t%04d-%02d-%02d %02d:%02d.%02d\t%d", 1980 + (entry->modify_date >> 9),
+          (entry->modify_date >> 5) & 0xF, entry->modify_date & 0x1F, (entry->modify_time >> 11),
+          (entry->modify_time >> 5) & 0x3F, entry->modify_time & 0x1F, entry->file_size);
         printf("\t%.8s.%.3s\n", entry->filename, entry->ext);
+      } else {
+        printf("archivo\t%04d-%02d-%02d %02d:%02d.%02d\t%d", 1980 + (entry->modify_date >> 9),
+        (entry->modify_date >> 5) & 0xF, entry->modify_date & 0x1F, (entry->modify_time >> 11),
+        (entry->modify_time >> 5) & 0x3F, entry->modify_time & 0x1F, entry->file_size);
+        printf("\t%.8s.%.3s\n", entry->filename, entry->ext);
+      }
     }
   }
 }
@@ -113,33 +97,33 @@ void read_file(FILE *in, unsigned int fat_start, unsigned int data_start,
 
     // Read until we run out of file or clusters
     while(file_left > 0 && cluster != 0xFFFF) {
-        bytes_to_read = sizeof(buffer);
+      bytes_to_read = sizeof(buffer);
 
-        // don't read past the file or cluster end
-        if(bytes_to_read > file_left)
-            bytes_to_read = file_left;
-        if(bytes_to_read > cluster_left)
-            bytes_to_read = cluster_left;
+      // don't read past the file or cluster end
+      if(bytes_to_read > file_left)
+          bytes_to_read = file_left;
+      if(bytes_to_read > cluster_left)
+          bytes_to_read = cluster_left;
 
-        // read data from cluster, write to file
-        bytes_read = fread(buffer, 1, bytes_to_read, in);
-        // print file data
-        cout << buffer << endl;
+      // read data from cluster, write to file
+      bytes_read = fread(buffer, 1, bytes_to_read, in);
+      // print file data
+      cout << buffer << endl;
 
-        // decrease byte counters for current cluster and whole file
-        cluster_left -= bytes_read;
-        file_left -= bytes_read;
+      // decrease byte counters for current cluster and whole file
+      cluster_left -= bytes_read;
+      file_left -= bytes_read;
 
-        // if we have read the whole cluster, read next cluster # from FAT
-        if(cluster_left == 0) {
-            fseek(in, fat_start + cluster*2, SEEK_SET);
-            fread(&cluster, 2, 1, in);
+      // if we have read the whole cluster, read next cluster # from FAT
+      if(cluster_left == 0) {
+        fseek(in, fat_start + cluster*2, SEEK_SET);
+        fread(&cluster, 2, 1, in);
 
-            printf("End of cluster reached, next cluster %d\n", cluster);
+        printf("End of cluster reached, next cluster %d\n", cluster);
 
-            fseek(in, data_start + cluster_size * (cluster-2), SEEK_SET);
-            cluster_left = cluster_size; // reset cluster byte counter
-        }
+        fseek(in, data_start + cluster_size * (cluster-2), SEEK_SET);
+        cluster_left = cluster_size; // reset cluster byte counter
+      }
     }
 }
 
@@ -220,44 +204,48 @@ void catRead (FILE *in, PartitionTable *pt, Fat16BootSector bs, Fat16Entry entry
 
     // out = fopen(argv[2], "wb"); // write the file contents to disk
     read_file(in, fat_start, data_start, bs.sectors_per_cluster *
-                  bs.sector_size, entry.starting_cluster, entry.file_size);
+                bs.sector_size, entry.starting_cluster, entry.file_size);
 }
 
 int main() {
-    FILE * in = fopen("test.img", "rb");
-    int i;
-    PartitionTable pt[4];
-    Fat16BootSector bs;
-    Fat16Entry entry;
-
-    fseek(in, 0x1BE, SEEK_SET); // go to partition table start
-    fread(pt, sizeof(PartitionTable), 4, in); // read all four entries
-
-    for(i=0; i<4; i++) {
-        if(pt[i].partition_type == 4 || pt[i].partition_type == 6 ||
-           pt[i].partition_type == 14) {
-            printf("FAT16 filesystem found from partition %d\n", i);
-            break;
-        }
-    }
-
-    if(i == 4) {
-        printf("No FAT16 filesystem found, exiting...\n");
-        return -1;
-    }
-
-    fseek(in, 512 * pt[i].start_sector, SEEK_SET);
-    fread(&bs, sizeof(Fat16BootSector), 1, in);
-
-    printf("Now at 0x%X, sector size %d, FAT size %d sectors, %d FATs\n\n",
-           ftell(in), bs.sector_size, bs.fat_size_sectors, bs.number_of_fats);
-
-    fseek(in, (bs.reserved_sectors-1 + bs.fat_size_sectors * bs.number_of_fats) *
-          bs.sector_size, SEEK_CUR);
-
     string command;
     bool stop = false;
+    int counter = 0;
     while (!stop) {
+      FILE * in = fopen("test.img", "rb");
+      int i;
+      PartitionTable pt[4];
+      Fat16BootSector bs;
+      Fat16Entry entry;
+
+      fseek(in, 0x1BE, SEEK_SET); // go to partition table start
+      fread(pt, sizeof(PartitionTable), 4, in); // read all four entries
+
+      for(i=0; i<4; i++) {
+        if(pt[i].partition_type == 4 || pt[i].partition_type == 6 ||
+          pt[i].partition_type == 14) {
+            if (counter == 0) {
+              printf("FAT16 filesystem found from partition %d\n", i);
+            }
+          break;
+        }
+      }
+
+      if(i == 4) {
+        printf("No FAT16 filesystem found, exiting...\n");
+        return -1;
+      }
+
+      fseek(in, 512 * pt[i].start_sector, SEEK_SET);
+      fread(&bs, sizeof(Fat16BootSector), 1, in);
+
+      if (counter == 0) {
+        printf("Now at 0x%X, sector size %d, FAT size %d sectors, %d FATs\n\n",
+            ftell(in), bs.sector_size, bs.fat_size_sectors, bs.number_of_fats);
+      }
+
+      fseek(in, (bs.reserved_sectors-1 + bs.fat_size_sectors * bs.number_of_fats) *
+            bs.sector_size, SEEK_CUR);
       printf(">");
       getline(cin, command);
       if (command == "ls -l") {
@@ -271,8 +259,9 @@ int main() {
       } else if (isCatRead(command)) {
         catRead(in, pt, bs, entry, command.substr(4, command.size()));
       }
+      fclose(in);
+      counter++;
     }
     // printf("\nRoot directory read, now at 0x%X\n", ftell(in));
-    fclose(in);
     return 0;
 }
