@@ -157,7 +157,7 @@ int main() {
                     break;
                 }
             } while(entry.filename[0] != 0x00);
-        }*/
+        }
     //} while(strcpy(folderName, strtok(NULL, "\\")));
     //Loop end
 
