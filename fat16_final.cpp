@@ -381,13 +381,13 @@ int main() {
         fwrite(imageBuffer , 1, sizeof(imageBuffer), out);
         fclose(out);
         in = fopen("test.img", "rb");
-        fclose(in);
+        fclose(in); 
         //End Write to file
 //cat > [NAME]
       } else if (command.substr(0, 6) == "cat > "){
         string folderName = command.substr(6, command.size());
 
-        string catFilename, catFileext; // initially pad with spaces
+        string catFilename, catFileext;
         int k;
 
         for(k = 0; k < 8 && folderName[k] != '.' && folderName[k] != 0; k++){
@@ -415,9 +415,8 @@ int main() {
             newDirOff++;
             fseek(in, (ROOT_ADDRESS + (0x4000 * (newDirOff - 1))), SEEK_SET); //Seek for folder
             fread(&entry, sizeof(entry), 1, in);
-
         } while(entry.filename[0] != 0x00);
-        printf("Free cluster found in %d\n", newDirOff);
+        printf("Archivo creado.\n");
         newDirEntry.starting_cluster = newDirOff;
         
         //Writing dir entry
